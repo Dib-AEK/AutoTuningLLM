@@ -10,6 +10,9 @@ from PIL import Image
 from transformers import StoppingCriteria, StoppingCriteriaList
 from collections import defaultdict
 
+
+MAX_LENGTH = 3584
+
 class RunningVarTorch:
     def __init__(self, L=15, norm=False):
         self.values = None
@@ -61,7 +64,7 @@ class StoppingCriteriaScores(StoppingCriteria):
                     self.stopped[b] = self.stop_inds[b] >= self.size
                 else:
                     self.stop_inds[b] = int(
-                        min(max(self.size, 1) * 1.15 + 150 + self.window_size, 4095)
+                        min(max(self.size, 1) * 1.15 + 150 + self.window_size, MAX_LENGTH)
                     )
             else:
                 self.stop_inds[b] = 0
@@ -125,7 +128,7 @@ class PdfToText:
         Args:
             pdf (Path): The path to the PDF file.
             outpath (Optional[Path], optional): The output directory. If None, the PIL images will be returned instead. Defaults to None.
-            dpi (int, optional): The output DPI. Defaults to 96.
+            dpi (int, optional): The output DPI. Defaults to 96 (from paper).
             return_pil (bool, optional): Whether to return the PIL images instead of writing them to disk. Defaults to False.
             pages (Optional[List[int]], optional): The pages to rasterize. If None, all pages will be rasterized. Defaults to None.
 
@@ -169,19 +172,17 @@ class PdfToText:
         images = PdfToText.rasterize_paper(pdf=file_path, **kwargs)
         images = [Image.open(image) for image in images]
         return images 
-    
-    
-    
-    def convert(self, file_path:Path):
+       
+    def convert(self, file_path:Path, pages=None):
         if (not hasattr(self, "_processor")) or (not hasattr(self, "_model")):
             self.load_model()
 
-        images = self.pdf_to_image(file_path)
+        images = self.pdf_to_image(file_path, pages=pages)
         pixel_values = self._processor(images=images, return_tensors="pt").pixel_values
 
         outputs = self._model.generate( pixel_values.to(self.device),
                                         min_length=1,
-                                        max_length=6000,
+                                        max_length=MAX_LENGTH,
                                         bad_words_ids=[[self._processor.tokenizer.unk_token_id]],
                                         return_dict_in_generate=True,
                                         output_scores=True,
@@ -195,7 +196,7 @@ class PdfToText:
 
 if __name__ == "__main__":
     # The path of the pdf file
-    file_path = Path("docForTest.pdf")
+    file_path = Path("C:/Users/abdel/Downloads/rapport1.pdf")
 
     # Initialize the PdfToText class
     pdfToText = PdfToText()
