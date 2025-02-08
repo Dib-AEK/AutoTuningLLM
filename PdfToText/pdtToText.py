@@ -10,7 +10,7 @@ from PIL import Image
 from transformers import StoppingCriteria, StoppingCriteriaList
 from collections import defaultdict
 
-
+# maximum length depends on the model, for the small model it is 3584
 MAX_LENGTH = 3584
 
 class RunningVarTorch:
