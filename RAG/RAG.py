@@ -28,12 +28,41 @@ class Embeddings:
         self.embeddings_path = self._cache_path("embeddings.pkl")
 
     def _cache_path(self, filename: str) -> str:
+        """
+        Constructs the full cache file path for a given filename based on the cache directory.
+
+        Parameters:
+        filename (str): The name of the file for which the cache path is to be constructed.
+
+        Returns:
+        str: The full path to the cache file within the cache directory.
+        """
+
         return os.path.join(self.cache_dir, filename)
 
     def to_embeddings(self, documents: list):
+        """
+        Converts a list of documents to embeddings using the model's encode method.
+
+        Parameters:
+        documents (list): list of text documents to convert to embeddings.
+
+        Returns:
+        np.ndarray: 2D array of shape (len(documents), self.embedding_dim).
+        """
         return self.model.encode(documents, max_length=self.max_seq_length)
 
     def store_embeddings(self, documents: list):
+        """
+        Stores the embeddings of given documents in a file in the cache directory.
+        
+        If the embeddings file already exists, it loads the existing embeddings and
+        appends the new ones to it. If the total size of the embeddings exceeds 512MB,
+        it does not store the embeddings in memory to avoid memory issues.
+        
+        Parameters:
+        documents (list): list of text documents to store the embeddings of.
+        """
         stored_documents = set()
         new_documents = []
         
@@ -72,21 +101,57 @@ class Embeddings:
                 json.dump({"text": doc}, doc_file)
                 doc_file.write("\n")
 
-    def get_document(self, i: int):
+    def get_documents(self, i: Union[int, List[int]]):
+        """
+        Retrieve documents from the stored documents by index or indices.
+
+        Args:
+            i (int or List[int]): Index or indices of the documents to retrieve.
+
+        Returns:
+            str or List[str]: The document(s) at the specified index or indices.
+
+        Raises:
+            IndexError: If the index or indices are out of range.
+        """
         with open(self.documents_path, "r", encoding="utf-8") as doc_file:
-            for idx, line in enumerate(doc_file):
-                if idx == i:
-                    return json.loads(line)["text"]
+            if isinstance(i, int):
+                for idx, line in enumerate(doc_file):
+                    if idx == i:
+                        return json.loads(line)["text"]
+            else:
+                documents = {}
+                for idx, line in enumerate(doc_file):
+                    if idx in i:
+                        documents[idx] = json.loads(line)["text"]
+                return [documents[idx] for idx in i] 
         raise IndexError("Document index out of range.")
 
     @property
     def dimension(self):
+        """
+        Return the dimension of the embeddings.
+
+        This is the size of each vector in the embeddings array.
+
+        Raises:
+            ValueError: If the embedding dimension is not set yet.
+        """
         if self.embedding_dim is None:
             raise ValueError("Embedding dimension is not set yet.")
         return self.embedding_dim
     
     @property
     def embeddings(self):
+        """
+        Return the stored embeddings.
+
+        If the embeddings are not stored in memory, try to load them from the cache file.
+        If the cache file does not exist, print a warning and return None.
+
+        Returns:
+            The stored embeddings as a numpy array, or None if no embeddings are stored.
+        """
         if self._embeddings is None:
             if os.path.exists(self.embeddings_path):
                 embeddings = pickle.load(open(self.embeddings_path, "rb"))["embeddings"]
@@ -95,7 +160,6 @@ class Embeddings:
                 print("There are no embeddings stored")
         else:
             return self._embeddings
-
 
 
 
