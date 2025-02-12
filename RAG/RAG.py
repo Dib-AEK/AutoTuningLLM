@@ -15,6 +15,12 @@ from transformers import AutoModel
 import sys
 from typing import Union, List
 import numpy as np
+import hashlib
+
+
+
+def hash_array(arr):
+    return hashlib.sha256(arr.tobytes()).hexdigest()
 
 
 class Embeddings:
@@ -26,12 +32,17 @@ class Embeddings:
         os.makedirs(cache_dir, exist_ok=True)
         self.overwrite = overwrite
         
-        self.model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
-        self.max_seq_length = getattr(self.model.config, 'max_position_embeddings', 1024 * 4)
-        self.embedding_dim = getattr(self.model.config, 'hidden_size', None)
-        self._embeddings = None
+        # self._embeddings = None
         self.documents_path = self._cache_path("documents.jsonl")
         self.embeddings_path = self._cache_path("embeddings.pkl")
+        self._hash  = ":)"
+        self.ntotal = None
+    
+    def load_model(self):
+        print(f"Loading the model: {self.model_name}")
+        self.model = AutoModel.from_pretrained(self.model_name, trust_remote_code=True)
+        self.max_seq_length = getattr(self.model.config, 'max_position_embeddings', 1024 * 4)
+        self.embedding_dim = getattr(self.model.config, 'hidden_size', None)
 
     def _cache_path(self, filename: str) -> str:
         """
@@ -56,6 +67,10 @@ class Embeddings:
         Returns:
         np.ndarray: 2D array of shape (len(documents), self.embedding_dim).
         """
+        model_name = getattr(self.model.config, '_name_or_path', "") if hasattr(self,"model") else ""
+        if (not hasattr(self,"model")) or (model_name!=self.model_name):
+            self.load_model()
+            
         return self.model.encode(documents, max_length=self.max_seq_length)
 
     def add_documents(self, documents: list):
@@ -80,7 +95,6 @@ class Embeddings:
                 os.remove(self.embeddings_path)
                 
         
-        
         if os.path.exists(self.documents_path):
             with open(self.documents_path, "r", encoding="utf-8") as doc_file:
                 stored_documents = {json.loads(line)["text"] for line in doc_file}
@@ -88,6 +102,7 @@ class Embeddings:
         new_documents = [doc for doc in documents if doc not in stored_documents]
         
         if not new_documents:
+            print("All documents already processed.")
             return  # No new documents to process
         
         new_embeddings = self.to_embeddings(new_documents)
@@ -102,14 +117,16 @@ class Embeddings:
         
         with open(self.embeddings_path, "wb") as f:
             pickle.dump({"embeddings": all_embeddings}, f)
-
-        memory_size_mb = sys.getsizeof(all_embeddings) / (1024 * 1024)
-        size_limit = 512
-        if memory_size_mb <= size_limit:
-            self._embeddings = all_embeddings
-        else:
-            self._embeddings = None
-            print(f"Embeddings are larger than {size_limit}MB. Avoid storing them in memory. Storing them in a file instead.")
+        
+        self._hash = hash_array(all_embeddings) 
+        self.ntotal = all_embeddings.shape[0]
+        # memory_size_mb = sys.getsizeof(all_embeddings) / (1024 * 1024)
+        # size_limit = 512
+        # if memory_size_mb <= size_limit:
+        #     self._embeddings = all_embeddings
+        # else:
+        #     self._embeddings = None
+        #     print(f"Embeddings are larger than {size_limit}MB. Avoid storing them in memory. Storing them in a file instead.")
 
         with open(self.documents_path, "a", encoding="utf-8") as doc_file:
             for doc in new_documents:
@@ -167,29 +184,31 @@ class Embeddings:
         Returns:
             The stored embeddings as a numpy array, or None if no embeddings are stored.
         """
-        if self._embeddings is None:
-            if os.path.exists(self.embeddings_path):
-                embeddings = pickle.load(open(self.embeddings_path, "rb"))["embeddings"]
-                return embeddings
-            else:
-                print("There are no embeddings stored")
-                return None
+
+        if os.path.exists(self.embeddings_path):
+            embeddings = pickle.load(open(self.embeddings_path, "rb"))["embeddings"]
+            return embeddings
         else:
-            return self._embeddings
+            raise FileNotFoundError(f"Embeddings file not found: {self.embeddings_path}")
 
     def __len__(self):
-        with open(self.documents_path, "r", encoding="utf-8") as doc_file:
-            return sum(1 for _ in doc_file)
+        if self.ntotal is not None:
+            return self.ntotal
+        else:
+            with open(self.documents_path, "r", encoding="utf-8") as doc_file:
+                self.ntotal = sum(1 for _ in doc_file)
+            return self.ntotal
 
+    @property
+    def embeddings_hash(self):
+        if self._hash  == ":)":
+            embeddings = self.embeddings
+            self._hash = hash_array(embeddings) 
+        return self._hash
 
-
-import os
-import faiss
-import numpy as np
-from typing import Union, List
 
 class ContextRetriever:
-    def __init__(self, embeddings: Embeddings, index_path: str = "../cache/index.faiss", 
+    def __init__(self, embeddings: Embeddings, cache_dir: str = "../cache",  
                  overwrite: bool = True, metric: str = "l2"):
         """
         ContextRetriever for retrieving similar documents based on embeddings.
@@ -202,11 +221,21 @@ class ContextRetriever:
         """
         assert metric in ["l2", "cosine"], "metric must be 'l2' or 'cosine'"
         self.embeddings = embeddings
+        index_path = os.path.join(cache_dir, "index.faiss")
+
         self.index_path = index_path
         self.overwrite = overwrite
         self.metric = metric
+        self._hash = embeddings.embeddings_hash
+        
         self.get_index_faiss()
-
+    
+    @property
+    def is_updated(self):
+        cond1 = (self._hash==self.embeddings.embeddings_hash)
+        cond2 = (self.index_faiss.ntotal==len(self.embeddings)) if hasattr(self,"index_faiss") else True # double check
+        return cond1&cond2
+    
     def _normalize(self, vectors: np.ndarray) -> np.ndarray:
         """ Normalize vectors for cosine similarity. """
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -217,7 +246,11 @@ class ContextRetriever:
         if os.path.exists(self.index_path) and self.overwrite:
             print("Overwrite is true, old FAISS index is removed!")
             os.remove(self.index_path)
-
+        
+        if not self.is_updated:
+            print("Old FAISS index is removed because the database is has been updated!")
+            os.remove(self.index_path)
+        
         if os.path.exists(self.index_path):
             self.index_faiss = faiss.read_index(self.index_path)
         else:
@@ -235,14 +268,17 @@ class ContextRetriever:
                 self.index_faiss = None
 
     def retrieve_documents(self, query: Union[str, List[str]], top_k: int = 2):
-        """ Retrieve top-k similar documents for a given query. """
-        if self.index_faiss is None:
+        """ Retrieve top-k similar documents for a given query. If cosine similarity, 
+        and if similarity is higher than 0.5, return all elements with a similarity higher 
+        than 0.5, with a limit set to 2*top_k"""
+        
+        if (self.index_faiss is None) or (not self.is_updated):
             self.get_index_faiss()
         
         if isinstance(query, str):
             query = [query]
         
-        query_embedding = self.embeddings.model.encode(query)
+        query_embedding = self.embeddings.to_embeddings(query)
         if self.metric == "cosine":
             query_embedding = self._normalize(query_embedding)
             top_k = top_k*2
@@ -260,7 +296,23 @@ class ContextRetriever:
         return self.embeddings.get_documents(indices)
 
     
+class ContextManager():
+    def __init__(self, documents: List[str]=[], overwrite: bool = True, 
+                       metric: str = "l2", cache_dir: str = "../cache"):
+        
+        self.embeddings = Embeddings(overwrite = overwrite)
+        self.add_documents_if_exists(documents)
+        self.retriever = ContextRetriever(self.embeddings, cache_dir, overwrite, metric)   
+
+    def add_documents_if_exists(self, documents: List[str]=[]):
+        if len(documents)>0:
+            self.embeddings.add_documents(documents)
+        
+    def retrieve_documents(self, query: Union[str, List[str]], documents: List[str]=[], top_k: int = 2):
+        self.add_documents_if_exists(documents)
+        return self.retriever.retrieve_documents(query, top_k) 
     
+
     
     
     

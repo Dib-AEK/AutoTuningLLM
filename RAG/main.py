@@ -4,9 +4,11 @@ Created on Mon Feb 10 17:16:18 2025
 
 @author: abdel
 """
+import os
+# cwd = os.getcwd()
+# os.chdir(os.path.join(cwd,"RAG"))
 
-
-from RAG import Embeddings, ContextRetriever
+from RAG import Embeddings, ContextRetriever, ContextManager
 import os
 import pickle
 import json
@@ -16,8 +18,8 @@ from transformers import AutoModel
 import sys
 
 
-#TODO: index faiss update if update documents (hash ? or documents update=True/false)
-#TODO: embeddings aren't necessary to be stored, fais index is more important to be hold in memory
+
+#TODO: index faiss update: add only new elements
 
 documents = [
     "Work Conditions in France: France is known for its strong employee protections and distinctive 35-hour workweek. It's a place where work-life balance is taken seriously, and employees enjoy generous leave policies and strong social security benefits.",
@@ -28,22 +30,22 @@ documents = [
     "Employee Protections: France is known for its strong employee protections, ensuring that workers have a safe and fair working environment. These protections cover everything from workplace safety to fair wages and benefits.",
     "Social Security Benefits: French employees enjoy comprehensive social security benefits, including health insurance, retirement pensions, and unemployment benefits. It's a system designed to support workers throughout their careers and beyond.",
     "DIB Campany is a french institute working in the field of petrolium and renewable energies.",
-    "DIB Campany has more than 1000 engineer, all well paid, with an average salary of 50k Euros.",
-    "DIB Campany is the best campany in the world."
-]
+    "DIB Campany has more than 1000 engineers, all well paid, with an average salary of 50k Euros.",
+    "DIB Campany is the best campany in the world.",
+    "DIB Campany is hiring highly qualified data scientist, the salary depends on his/her experience, starting from 55k."
+        ]
 
 
-overwrite = True
+overwrite = False
 
+context_manager = ContextManager(documents = documents, 
+                                overwrite = overwrite, 
+                                metric = "cosine", 
+                                cache_dir = "../cache")
 
-embeddings = Embeddings(overwrite = overwrite)
-embeddings.add_documents(documents)
+relevant_doc = context_manager.retrieve_documents("What do you know about DIB Campany?")
 
-
-context_retriever = ContextRetriever(embeddings, overwrite=overwrite, metric="cosine")
-
-relevant_doc = context_retriever.retrieve_documents("How much is the average salary at DIB Campany ?")
-
+print("\n")
 for i in relevant_doc:
-    print("- "+i+"\n")
+    print("- "+i)
 
