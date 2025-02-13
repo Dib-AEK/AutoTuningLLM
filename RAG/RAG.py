@@ -18,7 +18,6 @@ import numpy as np
 import hashlib
 
 
-
 def hash_array(arr):
     return hashlib.sha256(arr.tobytes()).hexdigest()
 
@@ -33,8 +32,8 @@ class Embeddings:
         self.overwrite = overwrite
         
         # self._embeddings = None
-        self.documents_path = self._cache_path("documents.jsonl")
-        self.embeddings_path = self._cache_path("embeddings.pkl")
+        self.documents_path = self._cache_path("embeddings.documents.jsonl")
+        self.embeddings_path = self._cache_path("embeddings.embeddings.pkl")
         self._hash  = ":)"
         self.ntotal = None
     
@@ -221,7 +220,7 @@ class ContextRetriever:
         """
         assert metric in ["l2", "cosine"], "metric must be 'l2' or 'cosine'"
         self.embeddings = embeddings
-        index_path = os.path.join(cache_dir, "index.faiss")
+        index_path = os.path.join(cache_dir, "contextretriever.index.faiss")
 
         self.index_path = index_path
         self.overwrite = overwrite
@@ -299,8 +298,10 @@ class ContextRetriever:
 class ContextManager():
     def __init__(self, documents: List[str]=[], overwrite: bool = True, 
                        metric: str = "l2", cache_dir: str = "../cache"):
+        self.cache_dir = cache_dir
+        os.makedirs(cache_dir, exist_ok=True)
         
-        self.embeddings = Embeddings(overwrite = overwrite)
+        self.embeddings = Embeddings(cache_dir=cache_dir, overwrite = overwrite)
         self.add_documents_if_exists(documents)
         self.retriever = ContextRetriever(self.embeddings, cache_dir, overwrite, metric)   
 
