@@ -21,6 +21,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.pyc
 
 # Ignore Jupyter Notebook cache files
 .ipynb_checkpoints/

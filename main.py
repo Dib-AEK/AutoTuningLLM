@@ -6,16 +6,16 @@ Created on Thu Feb 13 22:26:05 2025
 """
 
 import os
-from pdfToText import PdfToText
-from NougatParser import NougatParser
-from RAG import Embeddings, ContextRetriever, ContextManager
+from PdfToText.PdfToText import PdfToText
+from PdfToText.NougatParser import NougatParser
+from RAG.RAG import Embeddings, ContextRetriever, ContextManager
 from pathlib import Path
 import json
 
 
 # Define the paths
-pdf_folder = Path(os.getcwd()/"pdfDocuments")
-cache_dir = Path(os.getcwd()/"cache")
+pdf_folder = Path(os.getcwd()+"/pdfDocuments")
+cache_dir = Path(os.getcwd()+"/cache")
 output_path_jsonl = cache_dir / f"pdfToTextCache/documents.jsonl"
 
 # Get all PDF files in the folder
