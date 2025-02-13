@@ -1,0 +1,26 @@
+# Ignore PDF files
+*.pdf
+
+# Ignore JSON files
+*.json
+
+# Ignore JSONL files
+*.jsonl
+
+# Ignore TXT files
+*.txt
+
+# Ignore pickle and faiss files
+*.pickle
+*.pkl
+*.faiss
+
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Ignore Jupyter Notebook cache files
+.ipynb_checkpoints/

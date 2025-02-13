@@ -6,12 +6,12 @@ import io
 import fitz
 from pathlib import Path
 from PIL import Image
-
+from typing import Union, List
 from transformers import StoppingCriteria, StoppingCriteriaList
 from collections import defaultdict
 
 # maximum length depends on the model, for the small model it is 3584
-MAX_LENGTH = 3584
+MAX_LENGTH = 4096 #3584
 
 class RunningVarTorch:
     def __init__(self, L=15, norm=False):
@@ -173,6 +173,15 @@ class PdfToText:
         images = [Image.open(image) for image in images]
         return images 
        
+    def validate_first_page(self, text: List[int], remove_if=["HAL Id"]):
+        first_page = text[0]
+        cond = True
+        
+        for i in remove_if:
+            cond &= (i not in first_page)
+        return cond
+      
+    
     def convert(self, file_path:Path, pages=None):
         if (not hasattr(self, "_processor")) or (not hasattr(self, "_model")):
             self.load_model()
@@ -190,30 +199,69 @@ class PdfToText:
         
         generated = self._processor.batch_decode(outputs[0], skip_special_tokens=True)
         generated = self._processor.post_process_generation(generated, fix_markdown=False)
-        return generated
+        
+        if not self.validate_first_page(generated):
+            generated = generated[1:]
+            
+        return " ".join(generated)
+    
+    def convert_by_batch(self, file_path: Path, batch_size: int = 8, pages:Union[int, List[int]]=None):
+        if (not hasattr(self, "_processor")) or (not hasattr(self, "_model")):
+            self.load_model()
+    
+        images = self.pdf_to_image(file_path, pages=pages)
+    
+        # Process images in batches of 8 if the number of images is greater than 8
+        
+        generated_results = []
+        
+        for i in range(0, len(images), batch_size):
+            batch_images = images[i:i + batch_size]
+            pixel_values = self._processor(images=batch_images, return_tensors="pt").pixel_values
+    
+            outputs = self._model.generate(
+                pixel_values.to(self.device),
+                min_length=1,
+                max_length=MAX_LENGTH,
+                bad_words_ids=[[self._processor.tokenizer.unk_token_id]],
+                return_dict_in_generate=True,
+                output_scores=True,
+                stopping_criteria=StoppingCriteriaList([StoppingCriteriaScores()])
+            )
+            
+            generated = self._processor.batch_decode(outputs[0], skip_special_tokens=True)
+            generated = self._processor.post_process_generation(generated, fix_markdown=False)
+            generated_results.extend(generated)
+        
+        if not self.validate_first_page(generated_results):
+            generated_results = generated_results[1:]
+            
+        return " ".join(generated_results)
     
 
 
-if __name__ == "__main__":
-    # The path of the pdf file
-    file_path = Path("C:/Users/abdel/Downloads/rapport1.pdf")
 
-    # Initialize the PdfToText class
-    pdfToText = PdfToText()
 
-    # Convert the PDF to text
-    generated_text = pdfToText.convert(file_path)
 
-    # Create the output file path by replacing the extension
-    output_path = file_path.with_suffix(".txt")
 
-    # Write the generated content to the new text file
-    try:
-        with output_path.open("w", encoding="utf-8") as file:
-            file.write("".join(generated_text))  # Concatenate all elements (pages) of `generated_text` into a single string
-        print(f"Text successfully written to: {output_path}")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
