@@ -23,20 +23,21 @@ pdf_files = [pdf_folder/f for f in os.listdir(pdf_folder) if f.endswith(".pdf")]
 # Start by only three documents
 pdf_files = pdf_files[:3]
 
-# Convert PDFs to text and parse them
-pdfToText = PdfToText()
+# # Convert PDFs to text and parse them
+# pdfToText = PdfToText()
 parser = NougatParser()
 
-for file in pdf_files:
-    generated_text = pdfToText.convert_by_batch(file, batch_size=8)
-    parser.parse_document(generated_text, output_path_jsonl)
+# for file in pdf_files:
+#     generated_text = pdfToText.convert_by_batch(file, batch_size=8)
+#     parser.parse_document(generated_text, output_path_jsonl)
 
 #Get all contents in one list
 contents = parser.sections_to_lists(files_path=output_path_jsonl)
 
 # Create an Embeddings object to store the parsed documents
 cache_dir_embeddings = cache_dir / "embeddings"
-context_manager = ContextManager(documents = contents, overwrite = True, metric = "cosine",cache_dir = "../cache")
+context_manager = ContextManager(documents = contents, overwrite = True, metric = "cosine",
+                                 cache_dir = "../cache", embeddings_batch_size=2)
 
 
 # Use the context to ask questions to the LLM

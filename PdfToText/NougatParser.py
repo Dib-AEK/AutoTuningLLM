@@ -109,14 +109,18 @@ class NougatParser:
            if document:
                contents = [section["content"] for section in document.get("sections", [])]
            elif files_path:
-               if isinstance(files_path, str):
+               if not isinstance(files_path, list):
                    files_path = [files_path]
                
                for path in files_path:
                    with open(path, "r", encoding="utf-8") as f:
                        for line in f:
                            data = json.loads(line)
-                           contents.extend([section["content"] for section in data.get("sections", [])])
+                           contents.extend([section["heading"]+" \n "+section["content"] 
+                                            for section in data.get("sections", []) 
+                                            if (("reference" not in section["heading"].lower()) and 
+                                                ("biblio" not in section["heading"].lower()))
+                                            ])
            
            return contents
             

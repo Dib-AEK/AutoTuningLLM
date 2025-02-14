@@ -16,7 +16,7 @@ import sys
 from typing import Union, List
 import numpy as np
 import hashlib
-
+from tqdm import tqdm
 
 def hash_array(arr):
     return hashlib.sha256(arr.tobytes()).hexdigest()
@@ -56,7 +56,7 @@ class Embeddings:
 
         return os.path.join(self.cache_dir, filename)
 
-    def to_embeddings(self, documents: list):
+    def to_embeddings(self, documents: list, batch_size: int=8):
         """
         Converts a list of documents to embeddings using the model's encode method.
 
@@ -69,10 +69,15 @@ class Embeddings:
         model_name = getattr(self.model.config, '_name_or_path', "") if hasattr(self,"model") else ""
         if (not hasattr(self,"model")) or (model_name!=self.model_name):
             self.load_model()
-            
-        return self.model.encode(documents, max_length=self.max_seq_length)
+        
+        all_embeddings = []
+        for i in tqdm(range(0, len(documents), batch_size), desc="Getting embeddings "):
+            documents_batch = documents[i:i+batch_size]
+            all_embeddings.append(self.model.encode(documents_batch, max_length=self.max_seq_length))
+        
+        return np.vstack(all_embeddings)
 
-    def add_documents(self, documents: list):
+    def add_documents(self, documents: list, batch_size: int=8):
         """
         Add documents of given documents in a file in the cache directory.
         
@@ -104,7 +109,7 @@ class Embeddings:
             print("All documents already processed.")
             return  # No new documents to process
         
-        new_embeddings = self.to_embeddings(new_documents)
+        new_embeddings = self.to_embeddings(new_documents, batch_size)
         
         if os.path.exists(self.embeddings_path):
             with open(self.embeddings_path, "rb") as f:
@@ -297,17 +302,17 @@ class ContextRetriever:
     
 class ContextManager():
     def __init__(self, documents: List[str]=[], overwrite: bool = True, 
-                       metric: str = "l2", cache_dir: str = "../cache"):
+                       metric: str = "l2", cache_dir: str = "../cache", embeddings_batch_size:int=8):
         self.cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
         
         self.embeddings = Embeddings(cache_dir=cache_dir, overwrite = overwrite)
-        self.add_documents_if_exists(documents)
+        self.add_documents_if_exists(documents, embeddings_batch_size)
         self.retriever = ContextRetriever(self.embeddings, cache_dir, overwrite, metric)   
 
-    def add_documents_if_exists(self, documents: List[str]=[]):
+    def add_documents_if_exists(self, documents: List[str]=[], batch_size:int=8):
         if len(documents)>0:
-            self.embeddings.add_documents(documents)
+            self.embeddings.add_documents(documents, batch_size)
         
     def retrieve_documents(self, query: Union[str, List[str]], documents: List[str]=[], top_k: int = 2):
         self.add_documents_if_exists(documents)
