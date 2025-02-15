@@ -3,15 +3,18 @@ from transformers import AutoProcessor, VisionEncoderDecoderModel
 import torch
 from typing import Optional, List
 import io
-import fitz
+# import fitz
+import pymupdf
 from pathlib import Path
 from PIL import Image
 from typing import Union, List
 from transformers import StoppingCriteria, StoppingCriteriaList
 from collections import defaultdict
+from tqdm import tqdm 
+from time import time
 
 # maximum length depends on the model, for the small model it is 3584
-MAX_LENGTH = 4096 #3584
+MAX_LENGTH = 3584 #4096 #3584
 
 class RunningVarTorch:
     def __init__(self, L=15, norm=False):
@@ -141,7 +144,7 @@ class PdfToText:
             return_pil = True
         try:
             if isinstance(pdf, (str, Path)):
-                pdf = fitz.open(pdf)
+                pdf = pymupdf.open(pdf)
             if pages is None:
                 pages = range(len(pdf))
             for i in pages:
@@ -152,7 +155,7 @@ class PdfToText:
                     with (outpath / ("%02d.png" % (i + 1))).open("wb") as f:
                         f.write(page_bytes)
         except Exception:
-            pass
+            raise  Exception("There is a problem here!")
         if return_pil:
             return pillow_images
     
@@ -215,7 +218,8 @@ class PdfToText:
         
         generated_results = []
         
-        for i in range(0, len(images), batch_size):
+        for i in tqdm(range(0, len(images), batch_size), 
+                      desc=f"Processing PDF file (batch size = {batch_size}) "):
             batch_images = images[i:i + batch_size]
             pixel_values = self._processor(images=batch_images, return_tensors="pt").pixel_values
     
@@ -244,6 +248,34 @@ class PdfToText:
 
 
 
+# class PDFTextExtractor:
+#     def __init__(self, pdf_path):
+#         self.pdf_path = pdf_path
+#         self.document = fitz.open(pdf_path)
+
+#     def extract_text(self):
+#         full_text = []
+#         for page_num in range(len(self.document)):
+#             page = self.document.load_page(page_num)
+#             text = page.get_text("text")
+#             full_text.append(text)
+#         return "\n".join(full_text)
+
+#     def save_text_to_file(self, output_path):
+#         text = self.extract_text()
+#         with open(output_path, 'w', encoding='utf-8') as file:
+#             file.write(text)
+#         print(f"Text saved to {output_path}")
+
+
+
+# if __name__=="main":
+#     path = Path("../pdfDocuments/Dynamic demand estimation for an AMoD system in Paris.pdf")
+    
+#     extractor = PDFTextExtractor(path)
+#     text = extractor.extract_text()
+#     # print(text)
+#     # extractor.save_text_to_file("path/to/save/output.txt")
 
 
 

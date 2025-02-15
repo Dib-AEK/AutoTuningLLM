@@ -11,7 +11,8 @@ from PdfToText.NougatParser import NougatParser
 from RAG.RAG import Embeddings, ContextRetriever, ContextManager
 from pathlib import Path
 import json
-
+from tqdm import tqdm
+import time
 
 # Define the paths
 pdf_folder = Path(os.getcwd()+"/pdfDocuments")
@@ -20,24 +21,30 @@ output_path_jsonl = cache_dir / f"pdfToTextCache/documents.jsonl"
 
 # Get all PDF files in the folder
 pdf_files = [pdf_folder/f for f in os.listdir(pdf_folder) if f.endswith(".pdf")]
-# Start by only three documents
-pdf_files = pdf_files[:3]
 
-# # Convert PDFs to text and parse them
-# pdfToText = PdfToText()
-parser = NougatParser()
+# Convert PDFs to text and parse them
+pdfToText = PdfToText()
+parser = NougatParser(output_path_jsonl)
 
-# for file in pdf_files:
-#     generated_text = pdfToText.convert_by_batch(file, batch_size=8)
-#     parser.parse_document(generated_text, output_path_jsonl)
+for file in pdf_files: #tqdm(pdf_files, desc="Converting pdf to text "):
+    if not parser.is_in_parsed_files(file):
+        generated_text = pdfToText.convert_by_batch(file, batch_size=2)
+        parser.parse_document(markdown_text = generated_text, 
+                              input_path    = str(file))
+del pdfToText
+time.sleep(1)
+
 
 #Get all contents in one list
 contents = parser.sections_to_lists(files_path=output_path_jsonl)
+del parser
+time.sleep(1)
+
 
 # Create an Embeddings object to store the parsed documents
 cache_dir_embeddings = cache_dir / "embeddings"
 context_manager = ContextManager(documents = contents, overwrite = True, metric = "cosine",
-                                 cache_dir = "../cache", embeddings_batch_size=2)
+                                  cache_dir = cache_dir_embeddings, embeddings_batch_size=2)
 
 
 # Use the context to ask questions to the LLM
