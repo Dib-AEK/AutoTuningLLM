@@ -17,6 +17,7 @@ from typing import Union, List
 import numpy as np
 import hashlib
 from tqdm import tqdm
+import torch
 
 def hash_array(arr):
     return hashlib.sha256(arr.tobytes()).hexdigest()
@@ -25,7 +26,8 @@ def hash_array(arr):
 class Embeddings:
     def __init__(self, model_name: str = "jinaai/jina-embeddings-v2-base-en", 
                       cache_dir: str = "../cache",
-                      overwrite: bool=True):
+                      overwrite: bool = True,
+                      device : str = None):
         self.model_name = model_name
         self.cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
@@ -36,12 +38,18 @@ class Embeddings:
         self.embeddings_path = self._cache_path("embeddings.embeddings.pkl")
         self._hash  = ":)"
         self.ntotal = None
-    
+        if device:
+            self.device = device
+        else:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
     def load_model(self):
         print(f"Loading the model: {self.model_name}")
         self.model = AutoModel.from_pretrained(self.model_name, trust_remote_code=True)
         self.max_seq_length = getattr(self.model.config, 'max_position_embeddings', 1024 * 4)
         self.embedding_dim = getattr(self.model.config, 'hidden_size', None)
+        
+        self.model.to(self.device)
 
     def _cache_path(self, filename: str) -> str:
         """
@@ -73,7 +81,9 @@ class Embeddings:
         all_embeddings = []
         for i in tqdm(range(0, len(documents), batch_size), desc="Getting embeddings "):
             documents_batch = documents[i:i+batch_size]
-            all_embeddings.append(self.model.encode(documents_batch, max_length=self.max_seq_length))
+            all_embeddings.append(self.model.encode(documents_batch, 
+                                                    max_length=self.max_seq_length,
+                                                    device=self.device))
         
         return np.vstack(all_embeddings)
 
@@ -301,12 +311,12 @@ class ContextRetriever:
 
     
 class ContextManager():
-    def __init__(self, documents: List[str]=[], overwrite: bool = True, 
-                       metric: str = "l2", cache_dir: str = "../cache", embeddings_batch_size:int=8):
+    def __init__(self, documents: List[str]=[], overwrite: bool = True, metric: str = "l2", 
+                 cache_dir: str = "../cache", embeddings_batch_size:int=8, device:str=None):
         self.cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
         
-        self.embeddings = Embeddings(cache_dir=cache_dir, overwrite = overwrite)
+        self.embeddings = Embeddings(cache_dir=cache_dir, overwrite = overwrite, device=device)
         self.add_documents_if_exists(documents, embeddings_batch_size)
         self.retriever = ContextRetriever(self.embeddings, cache_dir, overwrite, metric)   
 
