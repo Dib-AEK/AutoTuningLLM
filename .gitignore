@@ -18,6 +18,7 @@
 
 # Ignore Python cache files
 __pycache__/
+*__pycache_
 *.py[cod]
 *.pyo
 *.pyd

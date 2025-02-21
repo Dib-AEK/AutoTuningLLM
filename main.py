@@ -161,7 +161,8 @@ if run_gui:
         msg.submit(user, inputs=[msg, chatbot], outputs=[msg, chatbot]).then(
                    user_interaction, inputs=[model_selector, chatbot, context_switch], outputs=chatbot)
         
-        submit.click(user_interaction, inputs=[model_selector, chatbot], outputs=chatbot)
+        submit.click(user, inputs=[msg, chatbot], outputs=[msg, chatbot]).then(
+                   user_interaction, inputs=[model_selector, chatbot, context_switch], outputs=chatbot)
         history.click(reset_chat, outputs=chatbot)
         stop_button.click(lambda: demo.close())
     
