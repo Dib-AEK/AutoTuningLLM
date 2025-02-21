@@ -18,7 +18,7 @@ from tqdm import tqdm
 import time
 
 
-run_gui = False
+run_gui = True
 # Define the paths
 pdf_folder = Path(os.getcwd()+"/pdfDocuments")
 cache_dir = Path(os.getcwd()+"/cache")
